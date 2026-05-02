@@ -54,6 +54,15 @@ This engine answers both questions a lender actually needs answered:
 | A chatbot | A credit committee decision support tool |
 | Scraped data dependent | Physics-based synthetic data anchored to real circle rates |
 
+## Image Analysis Feature
+
+The system includes an optional image analysis component that uses Cloudflare Workers AI to analyze property images:
+
+- **Visual Condition Assessment**: Detects construction quality, visible issues, and property condition
+- **Risk Flag Integration**: Image analysis results are converted to risk flags that affect LTV recommendations
+- **Confidence Scoring**: AI confidence levels contribute to overall valuation confidence
+- **Fallback Mechanism**: Works with or without Cloudflare credentials using mock analysis for testing
+
 ---
 
 ## System Architecture
@@ -98,7 +107,21 @@ This engine answers both questions a lender actually needs answered:
 │  No database required.       │   │                                           │
 │                              │   │  Fallback²: Deterministic template        │
 └──────────────┬───────────────┘   │            (never fails at demo)         │
-               │                   └──────────────────────────────────────────┘
+               │                   └─────────────────────┬────────────────────┘
+               ▼                                         │
+┌───────────────────────────────────────────────────────┼─────────────────────┐
+│                    IMAGE ANALYSIS                     │                     │
+│                                                       ▼                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │              Cloudflare Workers AI (LLaVA)                             │  │
+│  │                                                                       │  │
+│  │  Analyzes property images for:                                        │  │
+│  │  - Construction quality                                               │  │
+│  │  - Visible condition                                                  │  │
+│  │  - Property type verification                                         │  │
+│  │  - Visible issues (cracks, water stains, etc.)                        │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
                ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              ENGINE LAYER                                    │
@@ -502,22 +525,26 @@ collateral-engine/
 
 ## Running Locally
 
+For low-spec laptops, train the backend data/model in Google Colab instead of locally:
+[Colab backend training guide](docs/colab_training.md) and [ready-to-run notebook](notebooks/train_backend_on_colab.ipynb).
+
 ### Backend
 
 ```bash
-cd backend
+cd /e/TenzorXAI
+source .venv/Scripts/activate
 
 # Install dependencies
-pip install -r requirements.txt
+python -m pip install -r backend/requirements.txt
 
 # Generate synthetic data (run once)
-python scripts/synthetic_generator.py
+python backend/scripts/synthetic_generator.py
 
 # Train model (run once, ~2 minutes)
-python scripts/train_model.py
+python backend/scripts/train_model.py
 
 # Start API
-uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
 ```bash
@@ -538,14 +565,29 @@ curl -X POST http://localhost:8000/valuate \
 ```bash
 cd worker
 
-# Install Wrangler
-npm install -g wrangler
+# Install local Worker dependencies
+npm install
+
+# Run locally for frontend narrative memos
+npm run dev
+```
+
+The local Worker runs at:
+
+```text
+http://127.0.0.1:8787
+```
+
+For deployment:
+
+```bash
+cd worker
 
 # Set OpenRouter API key as secret
-wrangler secret put OPENROUTER_API_KEY
+npx wrangler secret put OPENROUTER_API_KEY
 
 # Deploy
-wrangler deploy
+npm run deploy
 
 # Test
 curl -X POST https://collateral-narrative-worker.<your-subdomain>.workers.dev/narrate \
@@ -562,6 +604,74 @@ CF_API_TOKEN=your_cloudflare_api_token
 
 # worker — set via wrangler secret, not .env
 OPENROUTER_API_KEY=your_openrouter_key
+```
+
+## Run on Your System (End-to-End)
+
+Use this when you want the backend + frontend + worker running together on your machine.
+
+### 1) Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- npm
+
+### 2) Start Backend API (FastAPI)
+
+```powershell
+cd E:\TenzorXAI
+
+# Create and activate venv (first time only)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install backend dependencies
+python -m pip install -r backend\requirements.txt
+
+# Generate data and train model (first time only)
+python backend\scripts\synthetic_generator.py
+python backend\scripts\train_model.py
+
+# Run API
+python -m uvicorn main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+### 3) Start Frontend (Next.js)
+
+Open a new terminal:
+
+```powershell
+cd E:\TenzorXAI\frontend
+npm install
+npm run dev
+```
+
+Frontend URL:
+
+```text
+http://localhost:3000
+```
+
+### 4) Start Worker (Cloudflare Wrangler)
+
+Open another new terminal:
+
+```powershell
+cd E:\TenzorXAI\worker
+npm install
+npm run dev
+```
+
+Worker URL:
+
+```text
+http://127.0.0.1:8787
+```
+
+### 5) Optional quick API test
+
+```powershell
+curl -X POST http://localhost:8000/valuate -H "Content-Type: application/json" -d "{\"locality\":\"Kondapur\",\"property_type\":\"apartment\",\"subtype\":\"2BHK\",\"size_sqft\":1150,\"age_years\":8}"
 ```
 
 ---
