@@ -14,6 +14,8 @@ export type ValuationFormData = {
   legal_status?: string;
   occupancy_status?: string;
   rental_yield?: number;
+  latitude?: number;
+  longitude?: number;
 };
 
 type InputFormProps = {
@@ -102,6 +104,16 @@ export default function InputForm({ onSubmit, loading, error }: InputFormProps) 
       if (rentalYield !== undefined) {
         multipartData.append("rental_yield", rentalYield.toString());
       }
+
+      const latitude = readNumber(formData, "latitude");
+      if (latitude !== undefined) {
+        multipartData.append("latitude", latitude.toString());
+      }
+
+      const longitude = readNumber(formData, "longitude");
+      if (longitude !== undefined) {
+        multipartData.append("longitude", longitude.toString());
+      }
       
       multipartData.append("image", image);
       onSubmit(multipartData);
@@ -119,6 +131,8 @@ export default function InputForm({ onSubmit, loading, error }: InputFormProps) 
         legal_status: String(formData.get("legal_status") || "clear"),
         occupancy_status: String(formData.get("occupancy_status") || "self_occupied"),
         rental_yield: readNumber(formData, "rental_yield"),
+        latitude: readNumber(formData, "latitude"),
+        longitude: readNumber(formData, "longitude"),
       });
     }
   }
@@ -216,6 +230,16 @@ export default function InputForm({ onSubmit, loading, error }: InputFormProps) 
           <div className="field">
             <label htmlFor="rental_yield">Rental yield %</label>
             <input id="rental_yield" name="rental_yield" type="number" step="0.1" min="0" defaultValue="3.2" />
+          </div>
+        </div>
+        <div className="two-col">
+          <div className="field">
+            <label htmlFor="latitude">Latitude (optional)</label>
+            <input id="latitude" name="latitude" type="number" step="0.000001" min="-90" max="90" />
+          </div>
+          <div className="field">
+            <label htmlFor="longitude">Longitude (optional)</label>
+            <input id="longitude" name="longitude" type="number" step="0.000001" min="-180" max="180" />
           </div>
         </div>
         <div className="field">

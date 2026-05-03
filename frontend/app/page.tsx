@@ -66,7 +66,55 @@ export type ValuationResponse = {
     image_confidence_raw?: number;
     image_confidence_effective?: number;
   };
+  location_proximity?: {
+    score: number;
+    source: string;
+    overpass_endpoint?: string | null;
+    fallback_reason?: string | null;
+    school_distance_km?: number | null;
+    metro_distance_km?: number | null;
+    market_distance_km?: number | null;
+    busy_score?: number | null;
+    distance_to_locality_km?: number | null;
+    components?: Record<string, number>;
+  };
 };
+
+function formDataToValuationRequest(formData: FormData): ValuationFormData {
+  const readNumber = (key: string) => {
+    const value = formData.get(key);
+    if (value === null || value === "") return undefined;
+    return Number(value);
+  };
+
+  const readString = (key: string) => {
+    const value = formData.get(key);
+    if (value === null || value === "") return undefined;
+    return String(value);
+  };
+
+  const hasLiftRaw = formData.get("has_lift");
+  const hasLift =
+    hasLiftRaw === null || hasLiftRaw === ""
+      ? undefined
+      : String(hasLiftRaw).toLowerCase() === "true";
+
+  return {
+    locality: String(formData.get("locality") ?? ""),
+    property_type: String(formData.get("property_type") ?? ""),
+    subtype: String(formData.get("subtype") ?? ""),
+    size_sqft: Number(formData.get("size_sqft") ?? 0),
+    age_years: Number(formData.get("age_years") ?? 0),
+    floor_num: readNumber("floor_num"),
+    total_floors: readNumber("total_floors"),
+    has_lift: hasLift,
+    legal_status: readString("legal_status"),
+    occupancy_status: readString("occupancy_status"),
+    rental_yield: readNumber("rental_yield"),
+    latitude: readNumber("latitude"),
+    longitude: readNumber("longitude"),
+  };
+}
 
 function KeyDrivers({ result }: { result: ValuationResponse }) {
   return (
@@ -147,7 +195,7 @@ export default function Home() {
         throw new Error(payload?.detail ?? `Backend returned ${response.status}`);
       }
 
-      setLastRequest(data instanceof FormData ? null : data);
+      setLastRequest(data instanceof FormData ? formDataToValuationRequest(data) : data);
       setResult(await response.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to run valuation");

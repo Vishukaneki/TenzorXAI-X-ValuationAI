@@ -11,6 +11,8 @@ function formatCurrency(value: number) {
 export default function ValuationCard({ result }: { result: ValuationResponse }) {
   const [low, high] = result.market_value_range;
   const [distressLow, distressHigh] = result.distress_value_range;
+  const [ttlLow, ttlHigh] = result.estimated_time_to_sell_days;
+  const proximity = result.location_proximity;
 
   return (
     <section className="result-card">
@@ -27,7 +29,7 @@ export default function ValuationCard({ result }: { result: ValuationResponse })
         <span className="pill pill-blue">{result.rpi_interpretation.replaceAll("_", " ")}</span>
       </div>
 
-      <div className="card-band">
+      <div className="card-band" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         <div className="mini-stat">
           <span>Distress range</span>
           <strong>{formatCurrency(distressLow)} - {formatCurrency(distressHigh)}</strong>
@@ -40,7 +42,36 @@ export default function ValuationCard({ result }: { result: ValuationResponse })
           <span>Confidence</span>
           <strong>{Math.round(result.confidence_score * 100)}%</strong>
         </div>
+        <div className="mini-stat">
+          <span>Time to liquidate</span>
+          <strong>{ttlLow} - {ttlHigh} days</strong>
+        </div>
       </div>
+
+      {proximity ? (
+        <>
+          <div className="card-band" style={{ marginTop: 12 }}>
+            <div className="mini-stat">
+              <span>Proximity score</span>
+              <strong>{proximity.score}/100</strong>
+            </div>
+            <div className="mini-stat">
+              <span>POI source</span>
+              <strong>{proximity.source.replaceAll("_", " ")}</strong>
+            </div>
+            <div className="mini-stat">
+              <span>Nearest metro</span>
+              <strong>{proximity.metro_distance_km != null ? `${proximity.metro_distance_km} km` : "N/A"}</strong>
+            </div>
+          </div>
+          {proximity.source !== "overpass_api" ? (
+            <p className="rationale" style={{ marginTop: 10 }}>
+              Live POI API unavailable, using heuristic fallback.
+              {proximity.fallback_reason ? ` Reason: ${proximity.fallback_reason}` : ""}
+            </p>
+          ) : null}
+        </>
+      ) : null}
     </section>
   );
 }
