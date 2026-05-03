@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ValuationResponse } from "@/app/page";
 import type { ValuationFormData } from "@/components/InputForm";
 
@@ -46,6 +46,16 @@ export default function WhatIfSimulator({
   const [result, setResult] = useState<WhatIfResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!baseRequest) return;
+    setAgeYears(Math.round(baseRequest.age_years));
+    setFloorNum(baseRequest.floor_num ?? 5);
+    setSizeSqft(Math.round(baseRequest.size_sqft));
+    setLegalStatus(baseRequest.legal_status ?? "clear");
+    setResult(null);
+    setError(undefined);
+  }, [baseRequest]);
 
   async function runScenario() {
     if (!baseRequest) return;
@@ -112,6 +122,10 @@ export default function WhatIfSimulator({
       <button className="secondary-button" type="button" onClick={runScenario} disabled={loading || !baseRequest}>
         {loading ? "Running scenario..." : "Run what-if"}
       </button>
+
+      {!baseRequest ? (
+        <p className="rationale">Run one valuation first to use this simulator.</p>
+      ) : null}
 
       {error ? <div className="error-box">{error}</div> : null}
 
