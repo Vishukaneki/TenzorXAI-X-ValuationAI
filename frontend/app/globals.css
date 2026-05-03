@@ -871,6 +871,117 @@ h1 {
   white-space: pre-line;
 }
 
+.image-analysis-card {
+  border: 1px solid rgba(20, 87, 217, 0.28);
+  background: linear-gradient(180deg, rgba(234, 241, 255, 0.82), rgba(255, 255, 255, 0.98));
+}
+
+.image-status-banner {
+  margin-top: 8px;
+  border: 1px solid #adc6ff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: #143f9e;
+  background: #eef4ff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.image-section {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  background: #fbfcff;
+}
+
+.image-section h3 {
+  margin: 0 0 12px;
+  color: #0b1220;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.image-kv-list {
+  display: grid;
+  gap: 10px;
+}
+
+.image-kv-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.image-kv-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.image-kv-row span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.image-kv-row strong {
+  text-transform: capitalize;
+}
+
+.image-issues-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.image-issues-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #f6e3a6;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #fff9e6;
+  text-transform: capitalize;
+}
+
+.issue-dot {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #8a5a00;
+  background: #ffe48b;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.image-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.image-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 @keyframes bot-bob {
   0%,
   100% {
@@ -1069,7 +1180,9 @@ h1 {
   .hero-metrics,
   .card-band,
   .two-col,
-  .ltv-split {
+  .ltv-split,
+  .image-grid,
+  .image-impact-grid {
     grid-template-columns: 1fr;
   }
 

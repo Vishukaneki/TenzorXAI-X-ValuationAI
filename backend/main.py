@@ -45,6 +45,7 @@ state = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Logger from HEAD, startup logic from HEAD (same as friend/main)
     logger.info("=== TenzorXAI backend starting up ===")
 
     try:
@@ -95,7 +96,7 @@ app.add_middleware(
 )
 
 
-# ── REQUEST LOGGING MIDDLEWARE ─────────────────────────────────────────────────
+# ── REQUEST LOGGING MIDDLEWARE (from HEAD) ─────────────────────────────────────
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
@@ -118,9 +119,11 @@ async def log_requests(request: Request, call_next):
 
 def _get_locality(locality_name: str) -> dict:
     meta = state["locality_meta"]
+    # Exact match first
     if locality_name in meta:
         logger.debug("Locality match (exact): %s", locality_name)
         return meta[locality_name]
+    # Case-insensitive fallback
     for key, val in meta.items():
         if key.lower() == locality_name.lower():
             logger.warning(
@@ -155,10 +158,25 @@ def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
         meta["size_vs_norm"], meta["tier"],
     )
 
-    # 2. Valuation model
+    # 2. Valuation model (friend/main: apply image market penalty to value)
     logger.debug("Step 2: Valuation model prediction")
     t   = time.perf_counter()
     val = state["valuation_model"].predict(model_features, req.size_sqft)
+    image_market_penalty_pct = (image_signals or {}).get("image_market_penalty_pct", 0.0)
+    if image_market_penalty_pct > 0:
+        valuation_mult = max(0.70, 1.0 - image_market_penalty_pct)
+        logger.warning(
+            "Applying image market penalty=%.1f%%  valuation_mult=%.3f",
+            image_market_penalty_pct * 100, valuation_mult,
+        )
+        val["market_value_range"] = [
+            round(val["market_value_range"][0] * valuation_mult, 0),
+            round(val["market_value_range"][1] * valuation_mult, 0),
+        ]
+        if "point_value" in val:
+            val["point_value"] = round(val["point_value"] * valuation_mult, 0)
+        if "price_per_sqft" in val:
+            val["price_per_sqft"] = round(val["price_per_sqft"] * valuation_mult, 2)
     logger.info(
         "Predicted  ppsf=%.0f  range=[%.0f, %.0f]  %.1fms",
         val["price_per_sqft"],
@@ -179,11 +197,24 @@ def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
         (time.perf_counter() - t) * 1000,
     )
 
-    # 4. Liquidity / RPI
+    # 4. Liquidity / RPI (friend/main: apply image RPI penalty)
     logger.debug("Step 4: RPI")
     t   = time.perf_counter()
     liq = compute_rpi(req, meta)
-    rpi = liq["resale_potential_index"]
+    image_rpi_penalty = (image_signals or {}).get("image_rpi_penalty", 0.0)
+    base_rpi = liq["resale_potential_index"]
+    rpi = round(max(0.0, base_rpi - image_rpi_penalty), 1)
+    liq["resale_potential_index"] = rpi
+    liq["rpi_components"]["image_condition_penalty"] = round(-image_rpi_penalty, 3)
+    if rpi >= 80:
+        liq["rpi_interpretation"] = "highly_liquid"
+    elif rpi >= 50:
+        liq["rpi_interpretation"] = "moderate_liquidity"
+    else:
+        liq["rpi_interpretation"] = "illiquid_or_specialized"
+    if image_rpi_penalty > 0:
+        logger.warning("Image RPI penalty=%.1f  base_rpi=%.1f  final_rpi=%.1f",
+                       image_rpi_penalty, base_rpi, rpi)
     logger.info("RPI=%.1f  (%s)  %.1fms", rpi, liq["rpi_interpretation"],
                 (time.perf_counter() - t) * 1000)
 
@@ -210,7 +241,7 @@ def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
         (time.perf_counter() - t) * 1000,
     )
 
-    # 7. Risk flags
+    # 7. Risk flags (structural + image)
     logger.debug("Step 7: Risk flags")
     t            = time.perf_counter()
     struct_flags = detect_risk_flags(req, meta, rpi, comp_result["density_score"])
@@ -219,19 +250,27 @@ def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
     sev_order    = {"high": 0, "medium": 1, "low": 2}
     all_flags.sort(key=lambda x: sev_order[x["severity"]])
     high_count   = sum(1 for f in all_flags if f["severity"] == "high")
-    logger.info("Risk flags  total=%d  high=%d  %.1fms",
-                len(all_flags), high_count, (time.perf_counter() - t) * 1000)
+    logger.info("Risk flags  total=%d  high=%d  image_flags=%d  %.1fms",
+                len(all_flags), high_count, len(image_flags),
+                (time.perf_counter() - t) * 1000)
     for f in all_flags:
         if f["severity"] == "high":
             logger.warning("HIGH risk flag: %s -- %s", f["flag"], f["detail"])
 
-    # 8. Confidence
+    # 8. Confidence aggregation (friend/main: use image_confidence_effective if available)
     logger.debug("Step 8: Confidence aggregation")
     t          = time.perf_counter()
-    image_conf = (image_signals or {}).get("image_confidence")
-    conf       = compute_confidence(
-        meta, comp_result["density_score"],
-        meta["size_vs_norm"], ttl_result["ttl_range_width_ratio"], image_conf,
+    image_conf = (
+        (image_signals or {}).get("image_confidence_effective")
+        if (image_signals or {}).get("image_confidence_effective") is not None
+        else (image_signals or {}).get("image_confidence")
+    )
+    conf = compute_confidence(
+        meta,
+        comp_result["density_score"],
+        meta["size_vs_norm"],
+        ttl_result["ttl_range_width_ratio"],
+        image_conf,
     )
     logger.info("Confidence=%.3f  image_used=%s  %.1fms",
                 conf["confidence_score"], image_conf is not None,
@@ -248,15 +287,24 @@ def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
         (time.perf_counter() - t) * 1000,
     )
 
-    # 10. Assemble output
+    # 10. Assemble output (friend/main: includes image_impact block)
     output = {
         **val, **dist, **liq, **ttl_result, **conf, **ltv,
         "comparable_transactions": comp_result["comps"],
         "risk_flags":              all_flags,
     }
+
     if image_signals and "image_summary" in image_signals:
         output["image_analysis"] = image_signals["image_summary"]
+        output["image_impact"] = {
+            "market_value_penalty_pct":    image_market_penalty_pct,
+            "rpi_penalty_points":          image_rpi_penalty,
+            "image_risk_flags_added":      len(image_flags),
+            "image_confidence_raw":        (image_signals or {}).get("image_confidence"),
+            "image_confidence_effective":  image_conf,
+        }
 
+    # Remove internal-only fields
     output.pop("ttl_range_width_ratio", None)
     output.pop("point_value", None)
     output.pop("price_per_sqft", None)
@@ -332,11 +380,13 @@ async def whatif(body: WhatIfRequest):
     try:
         base_result = _run_pipeline(body.base_request)
 
+        # Apply perturbations
         perturbed_data   = body.base_request.model_dump()
         perturbed_data.update(body.perturbations)
         perturbed_req    = ValuationRequest(**perturbed_data)
         perturbed_result = _run_pipeline(perturbed_req)
 
+        # Compute deltas
         base_mid        = sum(base_result["market_value_range"]) / 2
         pert_mid        = sum(perturbed_result["market_value_range"]) / 2
         value_delta     = round(pert_mid - base_mid, 0)

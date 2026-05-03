@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 class ValuationModel:
-    UNCERTAINTY_BAND = 0.08   # ±8% around point estimate → value range
+    UNCERTAINTY_BAND = 0.08   # +-8% around point estimate -> value range
 
     def __init__(self, model_path: str):
         logger.info("Loading model from %s", model_path)
@@ -32,6 +32,7 @@ class ValuationModel:
         X = pd.DataFrame([model_features])[self.features]
 
         price_per_sqft = float(self.model.predict(X)[0])
+        # friend/main logic: simple max clamp (no separate logging branch needed)
         circle_floor   = model_features["circle_rate"] * 0.95
         if price_per_sqft < circle_floor:
             logger.warning(
@@ -67,6 +68,7 @@ class ValuationModel:
         impact = {feat: val for feat, val in zip(self.features, sv)}
         logger.debug("SHAP values: %s", {k: round(v, 2) for k, v in impact.items()})
 
+        # Convert to % impact on price_per_sqft
         drivers = []
         for feat, val in sorted(impact.items(), key=lambda x: abs(x[1]), reverse=True)[:5]:
             pct = (val / base_ppsf) * 100 if base_ppsf else 0

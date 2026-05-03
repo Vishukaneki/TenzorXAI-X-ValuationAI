@@ -3,15 +3,25 @@
 import { ValuationResponse } from "@/app/page";
 
 export default function ImageAnalysisPanel({ result }: { result: ValuationResponse }) {
-  // Check if image analysis data exists
   const imageAnalysis = result.image_analysis;
-  
+
   if (!imageAnalysis) {
     return null;
   }
 
+  // friend/main: richer helpers and image_impact display
+  const formatLabel = (value?: string | null) => (value ? value.replaceAll("_", " ") : "Not detected");
+  const issues = imageAnalysis.visible_issues ?? [];
+  const impact = result.image_impact;
+  const imageQuality = result.confidence_breakdown?.image_quality;
+
+  const imageStatus =
+    (impact?.market_value_penalty_pct ?? 0) >= 0.08 || (impact?.image_risk_flags_added ?? 0) > 0
+      ? "Image indicates elevated risk"
+      : "Image indicates neutral/stable condition";
+
   return (
-    <section className="result-card">
+    <section className="result-card image-analysis-card">
       <div className="card-topline">
         <div>
           <p className="section-label">Image Analysis</p>
@@ -19,64 +29,87 @@ export default function ImageAnalysisPanel({ result }: { result: ValuationRespon
           <p className="field-hint">AI-powered analysis of property condition from uploaded image</p>
         </div>
         <span className="pill pill-blue">
-          {imageAnalysis.confidence_in_analysis ? 
-            `${Math.round(imageAnalysis.confidence_in_analysis * 100)}% confidence` : 
-            'Analysis complete'}
+          {imageAnalysis.confidence_in_analysis
+            ? `${Math.round(imageAnalysis.confidence_in_analysis * 100)}% confidence`
+            : "Analysis complete"}
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        <div className="space-y-4">
-          <h3 className="font-semibold text-lg">Condition Assessment</h3>
-          
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm text-muted">Construction Quality</p>
-              <p className="font-medium capitalize">{imageAnalysis.construction_quality || 'Not detected'}</p>
+      <div className="image-status-banner">{imageStatus}</div>
+
+      <div className="image-grid">
+        <div className="image-section">
+          <h3>Condition Assessment</h3>
+          <div className="image-kv-list">
+            <div className="image-kv-row">
+              <span>Construction quality</span>
+              <strong>{formatLabel(imageAnalysis.construction_quality)}</strong>
             </div>
-            
-            <div>
-              <p className="text-sm text-muted">Visible Condition</p>
-              <p className="font-medium capitalize">{imageAnalysis.visible_condition || 'Not detected'}</p>
+            <div className="image-kv-row">
+              <span>Visible condition</span>
+              <strong>{formatLabel(imageAnalysis.visible_condition)}</strong>
             </div>
-            
-            <div>
-              <p className="text-sm text-muted">Property Type Match</p>
-              <p className="font-medium">
-                {imageAnalysis.property_type_matches_claimed === true ? '✅ Matches' : 
-                 imageAnalysis.property_type_matches_claimed === false ? '❌ Mismatch' : 
-                 'Unknown'}
-              </p>
+            <div className="image-kv-row">
+              <span>Surrounding area</span>
+              <strong>{formatLabel(imageAnalysis.surrounding_area_quality)}</strong>
+            </div>
+            <div className="image-kv-row">
+              <span>Property type match</span>
+              <strong>
+                {imageAnalysis.property_type_matches_claimed === true
+                  ? "Matches"
+                  : imageAnalysis.property_type_matches_claimed === false
+                    ? "Mismatch"
+                    : "Unknown"}
+              </strong>
+            </div>
+            <div className="image-kv-row">
+              <span>Estimated floors</span>
+              <strong>{imageAnalysis.estimated_floors ?? "N/A"}</strong>
             </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="font-semibold text-lg">Detected Issues</h3>
-          
-          {imageAnalysis.visible_issues && imageAnalysis.visible_issues.length > 0 ? (
-            <ul className="space-y-2">
-              {imageAnalysis.visible_issues.map((issue: string, index: number) => (
-                <li key={index} className="flex items-center">
-                  <span className="mr-2">⚠️</span>
-                  <span className="capitalize">{issue.replace('_', ' ')}</span>
+        <div className="image-section">
+          <h3>Detected Issues</h3>
+          {issues.length > 0 ? (
+            <ul className="image-issues-list">
+              {issues.map((issue: string, index: number) => (
+                <li key={index}>
+                  <span className="issue-dot">!</span>
+                  <span>{formatLabel(issue)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-muted">No significant issues detected</p>
+            <p className="field-hint">No significant issues detected</p>
           )}
         </div>
       </div>
 
-      {result.confidence_breakdown?.image_quality && (
-        <div className="mt-6 pt-4 border-t border-line">
-          <p className="text-sm text-muted">
-            Image quality score contributed {Math.round(result.confidence_breakdown.image_quality * 100)}% 
-            to the overall confidence score
-          </p>
+      <div className="image-impact-grid">
+        <div className="mini-stat">
+          <span>Image risk flags</span>
+          <strong>{impact?.image_risk_flags_added ?? 0}</strong>
         </div>
-      )}
+        <div className="mini-stat">
+          <span>Market value impact</span>
+          <strong>-{Math.round((impact?.market_value_penalty_pct ?? 0) * 100)}%</strong>
+        </div>
+        <div className="mini-stat">
+          <span>Liquidity penalty</span>
+          <strong>-{impact?.rpi_penalty_points ?? 0} RPI</strong>
+        </div>
+      </div>
+
+      {imageQuality !== undefined ? (
+        <p className="image-note">
+          Confidence uses image signal at {Math.round(imageQuality * 100)}%.
+          {impact?.image_confidence_effective !== undefined
+            ? ` Effective confidence: ${Math.round(impact.image_confidence_effective * 100)}%.`
+            : ""}
+        </p>
+      ) : null}
     </section>
   );
 }
