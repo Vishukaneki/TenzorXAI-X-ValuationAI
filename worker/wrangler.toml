@@ -1,0 +1,8 @@
+name = "collateral-narrative-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[ai]
+binding = "AI"
+
+# Set secrets via: wrangler secret put OPENROUTER_API_KEY

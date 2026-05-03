@@ -1,0 +1,26 @@
+locality,city,tier,circle_rate,multiplier_mu,multiplier_sigma,norm_size,listing_density,lat,lon
+South Delhi,Delhi,1,8500,2.2,0.15,1400,85,28.549,77.206
+Dwarka,Delhi,2,5500,1.6,0.12,1100,70,28.592,77.046
+Rohini,Delhi,2,4800,1.5,0.1,1050,65,28.732,77.064
+Noida Sector 18,Delhi,2,5200,1.7,0.13,1150,72,28.57,77.321
+Greater Noida West,Delhi,3,3200,1.2,0.1,950,45,28.609,77.427
+Gurgaon Golf Course,Delhi,1,9000,2.4,0.18,1600,88,28.459,77.102
+Faridabad Old,Delhi,3,3000,1.1,0.08,900,38,28.408,77.317
+Bandra West,Mumbai,1,18000,2.5,0.2,950,90,19.059,72.826
+Andheri West,Mumbai,2,11000,1.8,0.14,800,78,19.136,72.826
+Thane West,Mumbai,2,8500,1.6,0.12,900,68,19.218,72.978
+Navi Mumbai Vashi,Mumbai,2,7800,1.5,0.11,950,65,19.075,73.009
+Mira Road,Mumbai,3,5500,1.3,0.09,700,48,19.401,72.869
+Powai,Mumbai,1,14000,2.1,0.16,1000,82,19.118,72.906
+Koramangala,Bangalore,1,7500,2.3,0.17,1200,87,12.935,77.624
+Whitefield,Bangalore,2,5800,1.7,0.13,1300,74,12.969,77.75
+HSR Layout,Bangalore,1,7000,2.1,0.15,1150,83,12.912,77.64
+Electronic City,Bangalore,2,4500,1.5,0.11,1100,62,12.839,77.677
+Sarjapur Road,Bangalore,2,5200,1.6,0.12,1200,66,12.908,77.686
+Yelahanka,Bangalore,3,3500,1.2,0.09,1000,42,13.101,77.596
+Jubilee Hills,Hyderabad,1,8000,2.2,0.16,1500,84,17.432,78.407
+Kondapur,Hyderabad,2,5500,1.7,0.13,1200,73,17.46,78.352
+Gachibowli,Hyderabad,2,6000,1.8,0.14,1250,76,17.44,78.348
+Kukatpally,Hyderabad,2,4800,1.5,0.11,1100,64,17.494,78.395
+LB Nagar,Hyderabad,3,3200,1.2,0.09,950,40,17.348,78.552
+Miyapur,Hyderabad,3,3800,1.3,0.1,1000,47,17.496,78.352

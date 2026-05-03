@@ -1,0 +1,26 @@
+locality,city,circle_rate,tier
+South Delhi,Delhi,8500,1
+Dwarka,Delhi,5500,2
+Rohini,Delhi,4800,2
+Noida Sector 18,Delhi,5200,2
+Greater Noida West,Delhi,3200,3
+Gurgaon Golf Course,Delhi,9000,1
+Faridabad Old,Delhi,3000,3
+Bandra West,Mumbai,18000,1
+Andheri West,Mumbai,11000,2
+Thane West,Mumbai,8500,2
+Navi Mumbai Vashi,Mumbai,7800,2
+Mira Road,Mumbai,5500,3
+Powai,Mumbai,14000,1
+Koramangala,Bangalore,7500,1
+Whitefield,Bangalore,5800,2
+HSR Layout,Bangalore,7000,1
+Electronic City,Bangalore,4500,2
+Sarjapur Road,Bangalore,5200,2
+Yelahanka,Bangalore,3500,3
+Jubilee Hills,Hyderabad,8000,1
+Kondapur,Hyderabad,5500,2
+Gachibowli,Hyderabad,6000,2
+Kukatpally,Hyderabad,4800,2
+LB Nagar,Hyderabad,3200,3
+Miyapur,Hyderabad,3800,3

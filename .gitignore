@@ -1,0 +1,58 @@
+# Python environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Generated backend data/model artifacts
+backend/data/*.parquet
+backend/data/*.pkl
+backend_data.zip
+TenzorXAI-colab.zip
+
+# Node / frontend dependencies and builds
+node_modules/
+.next/
+out/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cloudflare / Wrangler local state
+.wrangler/
+.dev.vars
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/
+!.vscode/settings.json
+.idea/
+
+# Notebook and temporary artifacts
+.ipynb_checkpoints/
+*.log
+*.tmp
+*.temp
+.cache/
