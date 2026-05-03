@@ -19,7 +19,7 @@ Not a property price predictor. A full-stack lending decision support system.
 ![LightGBM](https://img.shields.io/badge/LightGBM-4.3-2980B9?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=nextdotjs&logoColor=white)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare_Workers-AI-F38020?style=flat-square&logo=cloudflare&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Backend_Complete-22c55e?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Full_Stack_Complete-22c55e?style=flat-square)
 
 </div>
 
@@ -86,7 +86,9 @@ The system includes an optional image analysis component that uses Cloudflare Wo
 │  │  Optional:   │  │  Comps Table     │  │  chart       │  │              │  │
 │  │  · floor     │  │  SHAP Drivers    │  │  (recharts)  │  │              │  │
 │  │  · legal     │  │  Narrative       │  │              │  │              │  │
-│  │  · image     │  │  Image Analysis  │  │              │  │              │  │
+│  │  · occupancy │  │  Image Analysis  │  │              │  │              │  │
+│  │  · GPS coords│  │  Proximity Stats │  │              │  │              │  │
+│  │  · image     │  │                  │  │              │  │              │  │
 │  └──────────────┘  └─────────────────┘  └──────────────┘  └──────────────┘  │
 └──────────────────────────────┬──────────────────────────────────────────────┘
                                │
@@ -151,6 +153,199 @@ The system includes an optional image analysis component that uses Cloudflare Wo
 │                                                                               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## How the Application Works - Step by Step
+
+This section explains the complete workflow of the application from user interaction to final output.
+
+### Step 1: User Input and Request Initiation
+
+1. **Frontend Interaction**: User accesses the web interface at `http://localhost:3000`
+2. **Data Entry**: User fills out the property valuation form with:
+   - **Required Fields**: locality, property type, subtype, size (sqft), age (years)
+   - **Optional Fields**: floor number, total floors, lift availability, legal status, occupancy status, rental yield
+   - **Geolocation (Optional)**: latitude and longitude coordinates for proximity scoring
+   - **Image Upload (Optional)**: property photo for visual condition assessment
+
+3. **Request Routing**:
+   - Standard submission → `POST /valuate` endpoint
+   - With image → `POST /valuate-with-image` endpoint
+   - Scenario analysis → `POST /whatif` endpoint
+
+### Step 2: Backend Processing Pipeline
+
+#### 2.1 Locality Context Resolution
+- System looks up locality in `locality_metadata.csv` to get:
+  - `tier` (1=prime, 2=mid, 3=outer)
+  - `circle_rate` (statutory floor value)
+  - `norm_size` (typical property size)
+  - `listing_density` (market activity indicator)
+  - Geographic coordinates (centroid)
+
+#### 2.2 Feature Engineering
+The system calculates 13 predictive features:
+- **Age Depreciation**: `max(0.60, 1.0 - 0.01 × age)`
+- **Floor Adjustment**: Ground (-8%), Top (+5%), Mid (0%)
+- **Subtype Premium**: Based on property configuration
+- **Market Activity Proxy**: From listing density data
+- **Size vs Norm**: Anomaly detection feature
+- **Completeness Score**: Percentage of optional fields provided
+- **Infrastructure Score**: Based on locality tier
+
+#### 2.3 Proximity Scoring (When Coordinates Provided)
+If latitude/longitude are provided:
+1. **Live POI Lookup**: Queries Overpass API for nearby amenities when `ENABLE_POI_LOOKUP=true`
+2. **POI Categories Searched**:
+   - Schools (educational accessibility)
+   - Metro stations (public transport)
+   - Markets (commercial access)
+   - Busy areas (urban activity)
+3. **Fallback Mechanism**: Uses heuristic calculation if live lookup fails
+4. **Result**: Proximity score (0-100) with component breakdown:
+   - School distance
+   - Metro distance
+   - Market distance
+   - Busy area score
+
+### 3) Core Valuation Engine
+
+#### 3.1 Machine Learning Prediction
+- **Model**: LightGBM trained on 100k synthetic records
+- **Input**: 13 engineered features
+- **Output**: Price per sqft prediction
+- **Range Calculation**: ±8% uncertainty band around point estimate
+- **Explainability**: Top 5 SHAP drivers showing feature impact
+
+#### 3.2 Comparable Transaction Analysis
+- Searches synthetic dataset for similar properties:
+  - Same city + property type + tier
+  - Size within ±25% of subject property
+- Returns top 5 comparable transactions
+- Calculates density score (0-1) for confidence weighting
+
+#### 3.3 Risk and Liquidity Assessment
+Multiple engine modules process the valuation data:
+
+**Resale Potential Index (RPI)**: 0-100 score combining:
+- Asset type base value
+- Location demand factors
+- Market activity boost
+- Configuration standardness
+- Age factor
+- Lift availability
+- Legal clarity
+
+**Distress Value Calculation**: 6-component discount breakdown:
+- Asset type base discount
+- Location demand modifier
+- Legal clarity penalty
+- Market activity modifier
+- Buyer pool penalty
+- Asset uniqueness penalty
+
+**Time to Liquidate (TTL)**: Lower/upper bound estimation:
+- Lower bound: Base days × demand multiplier × (1 - RPI/200)
+- Upper bound: Lower × legal multiplier × uniqueness multiplier × stress multiplier
+
+**Confidence Scoring**: Weighted aggregation (0-1 score):
+- Data completeness (25%)
+- Comparable density (20%)
+- Circle rate freshness (15%)
+- Input consistency (20%)
+- Legal clarity (10%)
+- TTL range penalty (10%)
+- Image quality (5%, when provided)
+
+**Risk Flag Generation**: Structured alerts with severity and LTV impact:
+- Size anomalies
+- Circle rate variance
+- Comparable density issues
+- Market activity concerns
+- Configuration problems
+- Building age flags
+- Legal status issues
+- Image-based visual issues (when provided)
+
+**LTV Recommendation**: Conservative and standard loan-to-value ratios:
+- Standard LTV = Base + tier adjustment + RPI adjustment - confidence penalty
+- Conservative LTV = Standard - Σ(risk flag haircuts) - 0.05
+- Natural language rationale explaining the recommendation
+
+### 4) Image Intelligence Processing (When Image Provided)
+
+If property image was uploaded:
+
+1. **Cloudflare AI Analysis**: Image sent to LLaVA-1.5-7B model via Cloudflare Workers AI
+2. **Structured Response Parsing**: AI output converted to standardized assessment:
+   - Construction quality (good/average/poor)
+   - Visible condition (well_maintained/average/deteriorating)
+   - Visible issues (cracks, stains, structural damage)
+   - Property type verification
+   - Surrounding area quality
+   - AI confidence level (0.0-1.0)
+3. **Risk Integration**: Image findings converted to:
+   - Additional risk flags with severity ratings
+   - Confidence score contribution (5% weight)
+   - Market/RPI penalties for severe visual issues
+
+### 5) What-If Scenario Analysis
+
+When user requests scenario analysis via `/whatif` endpoint:
+
+1. **Base Valuation**: Complete pipeline run on current property data
+2. **Perturbation Application**: User-specified changes (age, floor, size, etc.)
+3. **Fast Mode Processing**: Skips live POI calls for speed, uses heuristic proximity
+4. **Delta Calculation**: Compares base vs perturbed results:
+   - Value change (absolute and percentage)
+   - RPI change
+   - Confidence score change
+5. **Side-by-side Comparison**: Both results displayed with visual deltas
+
+### 6) Narrative Generation
+
+Independent process that generates natural language explanation:
+
+1. **Cloudflare Worker Invocation**: Sends valuation data to CF Worker
+2. **Primary LLM**: llama-3.1-8b-instruct for detailed narrative
+3. **Fallback Chain**: 
+   - OpenRouter llama-3-8b-instruct:free if primary unavailable
+   - Deterministic template as hard fallback (never fails)
+4. **Output**: Credit committee paragraph explaining valuation rationale
+
+### 7) Final Response Assembly and Frontend Rendering
+
+Backend combines all processed information into structured JSON response:
+
+**Core Valuation Data**:
+- Market value range (with ±8% uncertainty band)
+- Distress value range with 6-component breakdown
+- Resale Potential Index (0-100) with interpretation
+- Time-to-liquidate estimate (days, lower/upper bounds)
+- Confidence score (0-1) with per-signal breakdown
+- Comparable transactions with price/sqft highlights
+- Key drivers from SHAP analysis
+- Structured risk flags with severity and LTV impact
+- LTV recommendations (standard and conservative) with rationale
+
+**Optional Components**:
+- Image analysis results and impact assessment
+- Location proximity score and component breakdown
+- What-if scenario deltas
+
+**Frontend Visualization**:
+- Interactive dashboard with all components
+- Valuation card with ranges and RPI gauge
+- Distress waterfall chart showing discount components
+- Confidence breakdown with horizontal bar charts
+- Risk flags panel color-coded by severity
+- Comparable transactions table with sorting
+- LTV card with rationale explanation
+- What-if simulator with delta visualization
+- Confidence heatmap for locality comparison
+- Image analysis panel (when applicable)
+- Narrative panel with fade-in explanation
 
 ---
 
@@ -419,7 +614,7 @@ Top features:     circle_rate, market_activity, listing_density,
 | OpenRouter — `llama-3-8b-instruct:free` | Narrative fallback |
 | Deterministic template | Hard fallback (never fails at demo) |
 
-### Frontend *(planned)*
+### Frontend
 | Tool | Purpose |
 |---|---|
 | Next.js 14 | App Router, SSR |
@@ -440,51 +635,61 @@ Top features:     circle_rate, market_activity, listing_density,
 ## Project Structure
 
 ```
-collateral-engine/
-│
+TenzorXAI/
+├── LICENSE
+├── README.md
 ├── backend/
-│   ├── main.py                    ✅ FastAPI app — all routes
-│   ├── schemas.py                 ✅ Pydantic request/response models
-│   ├── feature_engineer.py        ✅ Raw input → 13-feature vector
-│   ├── valuation_model.py         ✅ LightGBM wrapper + SHAP
-│   ├── comparable_engine.py       ✅ Top-5 comp lookup
-│   ├── engine_modules.py          ✅ RPI · distress · TTL · confidence · flags · LTV
-│   ├── image_analyzer.py          ✅ LLaVA vision analysis
-│   ├── requirements.txt           ✅
-│   │
+│   ├── main.py
+│   ├── schemas.py
+│   ├── feature_engineer.py
+│   ├── proximity_engine.py
+│   ├── valuation_model.py
+│   ├── comparable_engine.py
+│   ├── engine_modules.py
+│   ├── image_analyzer.py
+│   ├── logger.py
+│   ├── requirements.txt
 │   ├── scripts/
-│   │   ├── synthetic_generator.py ✅ 100k record physics-based generator
-│   │   └── train_model.py         ✅ LightGBM training pipeline
-│   │
+│   │   ├── synthetic_generator.py
+│   │   └── train_model.py
 │   └── data/
-│       ├── synthetic_100k.parquet ✅ Generated
-│       ├── locality_metadata.csv  ✅ Generated
-│       ├── circle_rates.csv       ✅ Generated
-│       ├── locality_confidence.json ✅ Generated
-│       └── model.pkl              ✅ Trained (3.25% MAPE)
-│
+│       ├── synthetic_100k.parquet
+│       ├── locality_metadata.csv
+│       ├── circle_rates.csv
+│       ├── locality_confidence.json
+│       └── model.pkl
+├── frontend/
+│   ├── package.json
+│   ├── next.config.mjs
+│   ├── tsconfig.json
+│   ├── app/
+│   │   ├── page.tsx
+│   │   ├── layout.tsx
+│   │   ├── globals.css
+│   │   └── results/page.tsx
+│   └── components/
+│       ├── InputForm.tsx
+│       ├── ValuationCard.tsx
+│       ├── DistressBreakdown.tsx
+│       ├── ConfidenceBreakdown.tsx
+│       ├── CompsTable.tsx
+│       ├── RiskFlags.tsx
+│       ├── LTVCard.tsx
+│       ├── WhatIfSimulator.tsx
+│       ├── ConfidenceHeatmap.tsx
+│       ├── NarrativePanel.tsx
+│       └── ImageAnalysisPanel.tsx
 ├── worker/
-│   ├── src/index.js               ✅ CF Worker — narrative generation
-│   └── wrangler.toml              ✅ Deployment config
-│
-└── frontend/                      🔲 In progress
-    ├── app/
-    │   ├── page.tsx               🔲 Input form
-    │   └── results/page.tsx       🔲 Output display
-    └── components/
-        ├── InputForm.tsx           🔲
-        ├── ValuationCard.tsx       🔲 Market + distress ranges
-        ├── DistressBreakdown.tsx   🔲 6-variable decomposition
-        ├── ConfidenceBreakdown.tsx 🔲 Per-signal bar chart
-        ├── CompsTable.tsx          🔲 Top-5 comparables
-        ├── RiskFlags.tsx           🔲 Color-coded by severity
-        ├── LTVCard.tsx             🔲 Conservative + standard
-        ├── WhatIfSimulator.tsx     🔲 Sliders + recharts delta
-        ├── ConfidenceHeatmap.tsx   🔲 Leaflet choropleth
-        └── NarrativePanel.tsx      🔲 LLM-generated text
+│   ├── package.json
+│   ├── wrangler.toml
+│   └── src/
+│       └── index.js
+├── docs/
+│   ├── colab_training.md
+│   └── image_analysis_setup.md
+└── notebooks/
+    └── train_backend_on_colab.ipynb
 ```
-
-**Legend: ✅ Complete · 🔲 Planned · 🚧 In Progress**
 
 ---
 
@@ -506,19 +711,19 @@ collateral-engine/
 - [x] FastAPI backend — `/valuate`, `/valuate-with-image`, `/whatif`, `/heatmap`, `/localities`, `/health`
 - [x] Cloudflare Worker — narrative generation with 3-tier fallback chain
 - [x] Precomputed heatmap data — per-locality confidence stats
+- [x] **Frontend — Input Form** — mandatory + optional fields, image upload
+- [x] **Frontend — Valuation Card** — range display, RPI gauge, confidence meter
+- [x] **Frontend — Distress Breakdown** — waterfall chart of discount components
+- [x] **Frontend — Confidence Breakdown** — per-signal horizontal bar chart
+- [x] **Frontend — Comparables Table** — sortable, price/sqft highlighted
+- [x] **Frontend — Risk Flags Panel** — color coded by severity (red/amber/green)
+- [x] **Frontend — LTV Card** — conservative vs standard with rationale
+- [x] **Frontend — What-If Simulator** — sliders → delta bar chart (Recharts)
+- [x] **Frontend — Confidence Heatmap** — Leaflet choropleth, click for locality stats
+- [x] **Frontend — Narrative Panel** — LLM paragraph, fade-in after valuation card
 
 ### 🔲 Planned
 
-- [ ] **Frontend — Input Form** — mandatory + optional fields, image upload
-- [ ] **Frontend — Valuation Card** — range display, RPI gauge, confidence meter
-- [ ] **Frontend — Distress Breakdown** — waterfall chart of discount components
-- [ ] **Frontend — Confidence Breakdown** — per-signal horizontal bar chart
-- [ ] **Frontend — Comparables Table** — sortable, price/sqft highlighted
-- [ ] **Frontend — Risk Flags Panel** — color coded by severity (red/amber/green)
-- [ ] **Frontend — LTV Card** — conservative vs standard with rationale
-- [ ] **Frontend — What-If Simulator** — sliders → delta bar chart (Recharts)
-- [ ] **Frontend — Confidence Heatmap** — Leaflet choropleth, click for locality stats
-- [ ] **Frontend — Narrative Panel** — LLM paragraph, fade-in after valuation card
 - [ ] **Deployment** — Railway (backend) + Vercel (frontend) + CF Workers (narrative)
 
 ---
@@ -741,22 +946,6 @@ Because real estate valuation has genuine uncertainty and any system that preten
 | Mumbai MMR | Bandra West, Powai | Andheri West, Thane West, Navi Mumbai Vashi | Mira Road |
 | Bangalore | Koramangala, HSR Layout | Whitefield, Electronic City, Sarjapur Road | Yelahanka |
 | Hyderabad | Jubilee Hills | Kondapur, Gachibowli, Kukatpally | LB Nagar, Miyapur |
-
----
-
-## Build Timeline
-
-```
-Day 1 AM    synthetic_generator.py  →  train_model.py  →  model.pkl       ✅
-Day 1 PM    feature_engineer  +  valuation_model  +  comparable_engine     ✅
-Day 1 Eve   engine_modules (RPI, distress, TTL, confidence, flags, LTV)    ✅
-            image_analyzer  +  main.py  +  CF Worker                        ✅
-
-Day 2 AM    Frontend: InputForm + ValuationCard + all breakdown components  🔲
-Day 2 PM    WhatIfSimulator + ConfidenceHeatmap + NarrativePanel            🔲
-Day 2 Eve   Deploy: Railway + Vercel + wrangler deploy                      🔲
-            Demo rehearsal                                                   🔲
-```
 
 ---
 
