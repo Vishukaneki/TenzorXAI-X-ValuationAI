@@ -10,6 +10,7 @@ import numpy as np
 from typing import Optional
 from schemas import ValuationRequest
 from logger import get_logger
+from proximity_engine import compute_proximity_signals
 
 logger = get_logger(__name__)
 
@@ -33,7 +34,7 @@ PROPERTY_TYPE_BASE_LIQUIDITY = {
 }
 
 
-def engineer_features(req: ValuationRequest, locality_row: dict) -> dict:
+def engineer_features(req: ValuationRequest, locality_row: dict, use_live_poi: bool = True) -> dict:
     """
     Returns a flat dict with:
       - model_features: dict fed to LightGBM (matches FEATURES in train_model.py)
@@ -70,14 +71,30 @@ def engineer_features(req: ValuationRequest, locality_row: dict) -> dict:
     # ── MARKET MULTIPLIER (tier-based point estimate) ─────────────────────────
     market_multiplier = float(locality_row["multiplier_mu"])
 
+    # ── OPTIONAL GEO-COORDINATE / PROXIMITY ENRICHMENT ────────────────────────
+    proximity = compute_proximity_signals(
+        req.latitude, req.longitude, locality_row, use_live_lookup=use_live_poi
+    )
+    if proximity.get("available"):
+        market_activity = float(np.clip(
+            market_activity * proximity["market_activity_mult"], 0.1, 1.0
+        ))
+        market_multiplier = float(np.clip(
+            market_multiplier * proximity["market_multiplier_mult"], 0.8, 3.5
+        ))
+        infra_score = float(np.clip(
+            infra_score * proximity["infra_score_mult"], 0.2, 1.0
+        ))
+
     # ── HAS LIFT ──────────────────────────────────────────────────────────────
     has_lift = req.has_lift if req.has_lift is not None else (
         req.total_floors is not None and req.total_floors >= 4
     )
 
     # ── INPUT COMPLETENESS ────────────────────────────────────────────────────
+    geo_pair = (req.latitude, req.longitude) if proximity.get("available") else None
     optional_fields = [req.floor_num, req.total_floors, req.has_lift,
-                       req.occupancy_status, req.legal_status, req.rental_yield]
+                       req.occupancy_status, req.legal_status, req.rental_yield, geo_pair]
     filled          = sum(1 for f in optional_fields if f is not None)
     completeness    = 0.5 + 0.5 * (filled / len(optional_fields))  # 0.5–1.0
 
@@ -114,6 +131,19 @@ def engineer_features(req: ValuationRequest, locality_row: dict) -> dict:
         "norm_size":          norm_size,
         "base_liquidity":     PROPERTY_TYPE_BASE_LIQUIDITY.get(req.property_type, 55),
         "has_lift":           has_lift,
+        "geo_distance_km":    proximity.get("distance_to_locality_km"),
+        "geo_quality":        None if not proximity.get("available") else round(proximity["proximity_score"] / 100.0, 3),
+        "proximity_score":    proximity.get("proximity_score"),
+        "proximity_source":   proximity.get("source"),
+        "proximity_endpoint": proximity.get("overpass_endpoint"),
+        "proximity_fallback_reason": proximity.get("fallback_reason"),
+        "proximity_components": proximity.get("score_components"),
+        "school_distance_km": proximity.get("school_distance_km"),
+        "metro_distance_km":  proximity.get("metro_distance_km"),
+        "market_distance_km": proximity.get("market_distance_km"),
+        "busy_score":         proximity.get("busy_score"),
+        "rpi_proximity_adjust": proximity.get("rpi_adjust", 0.0),
+        "ttl_proximity_mult": proximity.get("ttl_mult", 1.0),
     }
 
     if completeness < 0.65:

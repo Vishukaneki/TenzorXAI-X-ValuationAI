@@ -138,7 +138,11 @@ def _get_locality(locality_name: str) -> dict:
     )
 
 
-def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
+def _run_pipeline(
+    req: ValuationRequest,
+    image_signals: dict = None,
+    use_live_poi: bool = True,
+) -> dict:
     pipeline_start = time.perf_counter()
     logger.info(
         "Pipeline start  locality=%s  type=%s  subtype=%s  size=%.0f  age=%d",
@@ -149,7 +153,7 @@ def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
     logger.debug("Step 1: Feature engineering")
     t = time.perf_counter()
     locality_row   = _get_locality(req.locality)
-    eng            = engineer_features(req, locality_row)
+    eng            = engineer_features(req, locality_row, use_live_poi=use_live_poi)
     model_features = eng["model_features"]
     meta           = eng["meta"]
     logger.debug(
@@ -304,6 +308,20 @@ def _run_pipeline(req: ValuationRequest, image_signals: dict = None) -> dict:
             "image_confidence_effective":  image_conf,
         }
 
+    if meta.get("proximity_score") is not None:
+        output["location_proximity"] = {
+            "score": meta.get("proximity_score"),
+            "source": meta.get("proximity_source"),
+            "overpass_endpoint": meta.get("proximity_endpoint"),
+            "fallback_reason": meta.get("proximity_fallback_reason"),
+            "school_distance_km": meta.get("school_distance_km"),
+            "metro_distance_km": meta.get("metro_distance_km"),
+            "market_distance_km": meta.get("market_distance_km"),
+            "busy_score": meta.get("busy_score"),
+            "distance_to_locality_km": meta.get("geo_distance_km"),
+            "components": meta.get("proximity_components", {}),
+        }
+
     # Remove internal-only fields
     output.pop("ttl_range_width_ratio", None)
     output.pop("point_value", None)
@@ -339,6 +357,8 @@ async def valuate_with_image(
     occupancy_status: Optional[str]   = Form(None),
     legal_status:     Optional[str]   = Form(None),
     rental_yield:     Optional[float] = Form(None),
+    latitude:         Optional[float] = Form(None),
+    longitude:        Optional[float] = Form(None),
     image:            Optional[UploadFile] = File(None),
 ):
     req = ValuationRequest(
@@ -346,7 +366,7 @@ async def valuate_with_image(
         size_sqft=size_sqft, age_years=age_years, floor_num=floor_num,
         total_floors=total_floors, has_lift=has_lift,
         occupancy_status=occupancy_status, legal_status=legal_status,
-        rental_yield=rental_yield,
+        rental_yield=rental_yield, latitude=latitude, longitude=longitude,
     )
 
     image_signals = None
@@ -378,13 +398,14 @@ async def whatif(body: WhatIfRequest):
     """Perturb inputs and re-run full pipeline. Returns both base and perturbed."""
     logger.info("What-if request  perturbations=%s", body.perturbations)
     try:
-        base_result = _run_pipeline(body.base_request)
+        # Fast mode: skip live POI calls to avoid scenario timeout waits.
+        base_result = _run_pipeline(body.base_request, use_live_poi=False)
 
         # Apply perturbations
         perturbed_data   = body.base_request.model_dump()
         perturbed_data.update(body.perturbations)
         perturbed_req    = ValuationRequest(**perturbed_data)
-        perturbed_result = _run_pipeline(perturbed_req)
+        perturbed_result = _run_pipeline(perturbed_req, use_live_poi=False)
 
         # Compute deltas
         base_mid        = sum(base_result["market_value_range"]) / 2

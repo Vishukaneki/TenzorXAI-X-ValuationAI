@@ -21,6 +21,7 @@ def compute_rpi(req: ValuationRequest, meta: dict) -> dict:
 
     components["location_demand"] = {1: 15, 2: 5, 3: -10}[meta["tier"]]
     components["market_activity_boost"] = (meta["market_activity"] - 0.5) * 20
+    components["geo_proximity_boost"] = meta.get("rpi_proximity_adjust", 0.0)
 
     if req.subtype in {"2BHK", "3BHK"}:
         config_score = 5
@@ -112,7 +113,8 @@ def compute_ttl(req, meta: dict, rpi: float) -> dict:
     market_act   = meta["market_activity"]
     demand_mult  = 2.0 - market_act          # low activity → longer TTL
 
-    lower = int(base_days * demand_mult * (1 - rpi / 200))
+    proximity_ttl_mult = meta.get("ttl_proximity_mult", 1.0)
+    lower = int(base_days * demand_mult * (1 - rpi / 200) * proximity_ttl_mult)
     lower = max(15, lower)
 
     # Upper bound adds uniqueness, legal, and stress factors
@@ -170,27 +172,29 @@ def compute_confidence(meta: dict, comp_density: float,
     ttl_penalty = max(0, 1.0 - ttl_range_ratio * 0.4)
     signals["ttl_range_penalty"] = round(float(np.clip(ttl_penalty, 0.2, 1.0)), 3)
 
+    if meta.get("proximity_score") is not None:
+        prox_conf = float(np.clip(meta["proximity_score"] / 100.0, 0.3, 1.0))
+        signals["geo_proximity_quality"] = round(prox_conf, 3)
+
     # 7. Image quality (optional — only present if image was analyzed)
+    weights = {
+        "data_completeness":      0.25,
+        "comparable_density":     0.20,
+        "circle_rate_freshness":  0.15,
+        "input_consistency":      0.20,
+        "legal_clarity":          0.10,
+        "ttl_range_penalty":      0.10,
+    }
+    if "geo_proximity_quality" in signals:
+        for key in ("data_completeness", "comparable_density", "input_consistency"):
+            weights[key] -= 0.01
+        weights["geo_proximity_quality"] = 0.03
+
     if image_confidence is not None:
         signals["image_quality"] = round(image_confidence, 3)
-        weights = {
-            "data_completeness":    0.20,
-            "comparable_density":   0.20,
-            "circle_rate_freshness": 0.15,
-            "input_consistency":    0.20,
-            "legal_clarity":        0.10,
-            "ttl_range_penalty":    0.10,
-            "image_quality":        0.05,
-        }
-    else:
-        weights = {
-            "data_completeness":    0.25,
-            "comparable_density":   0.20,
-            "circle_rate_freshness": 0.15,
-            "input_consistency":    0.20,
-            "legal_clarity":        0.10,
-            "ttl_range_penalty":    0.10,
-        }
+        for key in ("data_completeness", "comparable_density", "input_consistency"):
+            weights[key] -= 0.01
+        weights["image_quality"] = 0.03
 
     score = sum(signals[k] * weights[k] for k in signals)
     score = float(np.clip(score, 0.20, 0.95))
@@ -315,6 +319,39 @@ def detect_risk_flags(req, meta: dict, rpi: float,
             "ltv_impact": -10,
             "detail":     "Non-clear legal status significantly increases liquidation risk",
         })
+
+    # 8. Geo-locality deviation (if exact coordinates were provided)
+    geo_distance_km = meta.get("geo_distance_km")
+    if geo_distance_km is not None:
+        if meta.get("proximity_score") is not None and meta["proximity_score"] < 25:
+            flags.append({
+                "flag":       "very_low_location_proximity_score",
+                "severity":   "high",
+                "ltv_impact": -6,
+                "detail":     f"Location proximity score is only {meta['proximity_score']:.1f}/100",
+            })
+        elif meta.get("proximity_score") is not None and meta["proximity_score"] < 40:
+            flags.append({
+                "flag":       "low_location_proximity_score",
+                "severity":   "medium",
+                "ltv_impact": -3,
+                "detail":     f"Location proximity score is {meta['proximity_score']:.1f}/100",
+            })
+
+        if geo_distance_km > 10:
+            flags.append({
+                "flag":       "geo_far_from_locality_centroid",
+                "severity":   "medium",
+                "ltv_impact": -4,
+                "detail":     f"Provided coordinates are {geo_distance_km:.1f} km from declared locality centroid",
+            })
+        elif geo_distance_km > 5:
+            flags.append({
+                "flag":       "geo_off_locality_core",
+                "severity":   "low",
+                "ltv_impact": -2,
+                "detail":     f"Provided coordinates are {geo_distance_km:.1f} km from declared locality centroid",
+            })
 
     # Sort by severity
     flags.sort(key=lambda x: SEVERITY_ORDER[x["severity"]])

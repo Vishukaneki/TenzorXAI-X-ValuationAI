@@ -601,6 +601,12 @@ curl -X POST https://collateral-narrative-worker.<your-subdomain>.workers.dev/na
 # backend/.env
 CF_ACCOUNT_ID=your_cloudflare_account_id
 CF_API_TOKEN=your_cloudflare_api_token
+# Optional live POI lookup for proximity score (schools/metro/market)
+ENABLE_POI_LOOKUP=false
+OVERPASS_URL=https://overpass-api.de/api/interpreter
+POI_SEARCH_RADIUS_M=3000
+POI_TIMEOUT_SEC=4.0
+POI_CACHE_TTL_SEC=900
 
 # worker — set via wrangler secret, not .env
 OPENROUTER_API_KEY=your_openrouter_key

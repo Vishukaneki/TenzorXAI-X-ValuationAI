@@ -23,6 +23,8 @@ class ValuationRequest(BaseModel):
     occupancy_status: Optional[str] = None   # self_occupied | rented | vacant
     legal_status:    Optional[str]  = None   # clear | disputed | pending
     rental_yield:    Optional[float] = None  # annual yield %
+    latitude:        Optional[float] = None  # optional precise property geo
+    longitude:       Optional[float] = None  # optional precise property geo
 
 
 class WhatIfRequest(BaseModel):
