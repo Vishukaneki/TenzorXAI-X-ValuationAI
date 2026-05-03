@@ -102,6 +102,17 @@ def _run_pipeline(req: ValuationRequest,
 
     # 2. Valuation model
     val = state["valuation_model"].predict(model_features, req.size_sqft)
+    image_market_penalty_pct = (image_signals or {}).get("image_market_penalty_pct", 0.0)
+    if image_market_penalty_pct > 0:
+        valuation_mult = max(0.70, 1.0 - image_market_penalty_pct)
+        val["market_value_range"] = [
+            round(val["market_value_range"][0] * valuation_mult, 0),
+            round(val["market_value_range"][1] * valuation_mult, 0),
+        ]
+        if "point_value" in val:
+            val["point_value"] = round(val["point_value"] * valuation_mult, 0)
+        if "price_per_sqft" in val:
+            val["price_per_sqft"] = round(val["price_per_sqft"] * valuation_mult, 2)
 
     # 3. Comparable engine
     comp_result = state["comparable_engine"].find_comps(
@@ -110,7 +121,17 @@ def _run_pipeline(req: ValuationRequest,
 
     # 4. Liquidity scoring
     liq = compute_rpi(req, meta)
-    rpi = liq["resale_potential_index"]
+    image_rpi_penalty = (image_signals or {}).get("image_rpi_penalty", 0.0)
+    base_rpi = liq["resale_potential_index"]
+    rpi = round(max(0.0, base_rpi - image_rpi_penalty), 1)
+    liq["resale_potential_index"] = rpi
+    liq["rpi_components"]["image_condition_penalty"] = round(-image_rpi_penalty, 3)
+    if rpi >= 80:
+        liq["rpi_interpretation"] = "highly_liquid"
+    elif rpi >= 50:
+        liq["rpi_interpretation"] = "moderate_liquidity"
+    else:
+        liq["rpi_interpretation"] = "illiquid_or_specialized"
 
     # 5. Distress calculation
     dist = compute_distress(req, meta, val["market_value_range"], rpi)
@@ -127,7 +148,11 @@ def _run_pipeline(req: ValuationRequest,
     all_flags.sort(key=lambda x: sev_order[x["severity"]])
 
     # 8. Confidence aggregation
-    image_conf = (image_signals or {}).get("image_confidence")
+    image_conf = (
+        (image_signals or {}).get("image_confidence_effective")
+        if (image_signals or {}).get("image_confidence_effective") is not None
+        else (image_signals or {}).get("image_confidence")
+    )
     conf = compute_confidence(
         meta,
         comp_result["density_score"],
@@ -153,6 +178,13 @@ def _run_pipeline(req: ValuationRequest,
 
     if image_signals and "image_summary" in image_signals:
         output["image_analysis"] = image_signals["image_summary"]
+        output["image_impact"] = {
+            "market_value_penalty_pct": image_market_penalty_pct,
+            "rpi_penalty_points": image_rpi_penalty,
+            "image_risk_flags_added": len(image_flags),
+            "image_confidence_raw": (image_signals or {}).get("image_confidence"),
+            "image_confidence_effective": image_conf,
+        }
 
     # Remove internal-only fields
     output.pop("ttl_range_width_ratio", None)

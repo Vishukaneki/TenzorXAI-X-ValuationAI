@@ -49,6 +49,22 @@ export type ValuationResponse = {
     conservative: number;
     rationale: string;
   };
+  image_analysis?: {
+    construction_quality?: string;
+    visible_condition?: string;
+    estimated_floors?: number | null;
+    visible_issues?: string[];
+    property_type_matches_claimed?: boolean | null;
+    surrounding_area_quality?: string;
+    confidence_in_analysis?: number;
+  };
+  image_impact?: {
+    market_value_penalty_pct: number;
+    rpi_penalty_points: number;
+    image_risk_flags_added: number;
+    image_confidence_raw?: number;
+    image_confidence_effective?: number;
+  };
 };
 
 function KeyDrivers({ result }: { result: ValuationResponse }) {
