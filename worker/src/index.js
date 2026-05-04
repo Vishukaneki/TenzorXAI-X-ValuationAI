@@ -127,7 +127,7 @@ async function callOpenRouter(env, userPrompt) {
       "HTTP-Referer": "https://collateral-engine.arbitrz.com",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3-8b-instruct:free",
+      model: "meta-llama/llama-3.3-70b-instruct:free",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },

@@ -23,8 +23,6 @@ dist/
 !.env.example
 
 # Generated backend data/model artifacts
-backend/data/*.parquet
-backend/data/*.pkl
 backend_data.zip
 TenzorXAI-colab.zip
 
