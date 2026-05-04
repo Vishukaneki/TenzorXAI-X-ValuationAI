@@ -722,10 +722,6 @@ TenzorXAI/
 - [x] **Frontend — Confidence Heatmap** — Leaflet choropleth, click for locality stats
 - [x] **Frontend — Narrative Panel** — LLM paragraph, fade-in after valuation card
 
-### 🔲 Planned
-
-- [ ] **Deployment** — Railway (backend) + Vercel (frontend) + CF Workers (narrative)
-
 ---
 
 ## Running Locally
